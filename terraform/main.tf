@@ -113,6 +113,13 @@ resource "aws_dynamodb_table" "intake" {
 
   # No server_side_encryption block. Defaults to AWS-owned key.
   # GAP-02: capstone learner expected to add this with a customer-owned key.
+
+  # GAP-02: customer-owned key added by capstone learner Ben Fiser
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.phi.arn
+  }
+
 }
 
 ######################################################################
@@ -184,7 +191,14 @@ resource "aws_iam_role_policy" "lambda_inline" {
         Effect   = "Allow"
         Action   = "s3:*"
         Resource = ["${aws_s3_bucket.uploads.arn}", "${aws_s3_bucket.uploads.arn}/*"]
+      },
+      # GAP-01 and GAP-02: allow use of CMK and only that key
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = aws_kms_key.phi.arn
       }
+
     ]
   })
 }
