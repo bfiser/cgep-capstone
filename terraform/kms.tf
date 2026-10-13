@@ -17,3 +17,15 @@ resource "aws_kms_alias" "phi" {
   name          = "alias/acme-health-phi"
   target_key_id = aws_kms_key.phi.key_id
 }
+
+resource "aws_kms_key" "evidence" {
+  description             = "Acme Health CMK for the evidence vault"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = { DataClass = "evidence" }
+}
+
+resource "aws_kms_alias" "evidence" {
+  name          = "alias/acme-health-evidence"
+  target_key_id = aws_kms_key.evidence.key_id
+}
