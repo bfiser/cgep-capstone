@@ -33,3 +33,46 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
     bucket_key_enabled = true
   }
 }
+
+######################################################################
+# GAP-04: Versioning on the uploads bucket
+# Control: HIPAA 164.308(a)(7), contingency plan (data backup)
+#
+# Keeps every prior version of each object, so an overwrite or
+# delete of PHI is recoverable.
+######################################################################
+resource "aws_s3_bucket_versioning" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+######################################################################
+# GAP-03: Deny non-TLS requests to the uploads bucket
+# Control: HIPAA 164.312(e)(1), transmission security
+#
+# Refuses any request not made over TLS, for every caller,
+# so ePHI in transit is always encrypted.
+######################################################################
+resource "aws_s3_bucket_policy" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureTransport"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource = [
+        aws_s3_bucket.uploads.arn,
+        "${aws_s3_bucket.uploads.arn}/*",
+      ]
+      Condition = {
+        Bool = { "aws:SecureTransport" = "false" }
+      }
+    }]
+  })
+}
