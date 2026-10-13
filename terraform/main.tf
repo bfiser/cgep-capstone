@@ -224,8 +224,14 @@ resource "aws_lambda_function" "intake" {
     }
   }
 
-  # GAP-05: no vpc_config block. Learner expected to add one referencing
-  # aws_subnet.private[*] and a hardened security group.
+  # GAP-05: run inside the starter's private subnets (HIPAA 164.312(e)(1))
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  # The VPC permission must exist before the Lambda moves into the VPC
+  depends_on = [aws_iam_role_policy_attachment.lambda_vpc]
 }
 
 ######################################################################
