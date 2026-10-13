@@ -76,3 +76,16 @@ resource "aws_s3_bucket_policy" "uploads" {
     }]
   })
 }
+
+######################################################################
+# GAP-08: API Gateway access logging destination
+# Control: HIPAA 164.312(b), audit controls
+#
+# Records who called the API, when, and with what result. Logs
+# request metadata only, never request bodies, so no PHI is
+# written to logs.
+######################################################################
+resource "aws_cloudwatch_log_group" "api_access" {
+  name              = "/aws/apigateway/acme-health-intake-access"
+  retention_in_days = 365
+}

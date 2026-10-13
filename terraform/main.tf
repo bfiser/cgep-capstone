@@ -256,7 +256,23 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.intake.id
   name        = "$default"
   auto_deploy = true
-  # GAP-08: no access_log_settings. Learner expected to wire CloudWatch logs.
+  # GAP-08: Capstone learner setup access logging and throttling
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format = jsonencode({
+      requestId   = "$context.requestId"
+      sourceIp    = "$context.identity.sourceIp"
+      requestTime = "$context.requestTime"
+      routeKey    = "$context.routeKey"
+      status      = "$context.status"
+      latency     = "$context.responseLatency"
+      error       = "$context.integrationErrorMessage"
+    })
+  }
+  default_route_settings {
+    throttling_burst_limit = 20
+    throttling_rate_limit  = 10
+  }
 }
 
 resource "aws_lambda_permission" "apigw" {
