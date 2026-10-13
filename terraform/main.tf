@@ -175,6 +175,8 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 # GAP-07: deliberately broad permissions on the workload data stores.
+# GAP-07: least privilege (HIPAA 164.312(a)(1)). Only the actions
+# handler.py performs, on only the resources it uses.
 resource "aws_iam_role_policy" "lambda_inline" {
   name = "intake-data-access"
   role = aws_iam_role.lambda.id
@@ -183,17 +185,20 @@ resource "aws_iam_role_policy" "lambda_inline" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid      = "WriteSubmissions"
         Effect   = "Allow"
-        Action   = "dynamodb:*"
+        Action   = "dynamodb:PutItem"
         Resource = aws_dynamodb_table.intake.arn
       },
       {
+        Sid      = "WriteUploads"
         Effect   = "Allow"
-        Action   = "s3:*"
-        Resource = ["${aws_s3_bucket.uploads.arn}", "${aws_s3_bucket.uploads.arn}/*"]
+        Action   = "s3:PutObject"
+        Resource = ["${aws_s3_bucket.uploads.arn}/uploads/*"]
       },
       # GAP-01 and GAP-02: allow use of CMK and only that key
       {
+        Sid      = "UseAcmeCMK"
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
         Resource = aws_kms_key.phi.arn
