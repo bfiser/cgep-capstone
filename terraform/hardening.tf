@@ -78,6 +78,59 @@ resource "aws_s3_bucket_policy" "uploads" {
 }
 
 ######################################################################
+# GAP-05: Run the Lambda inside the starter's VPC
+# Control: HIPAA 164.312(e)(1), transmission security
+#
+# Private subnets have no internet route. Gateway endpoints give the
+# Lambda a private path to S3 and DynamoDB only, and its security
+# group allows outbound HTTPS to those two services and nothing else.
+######################################################################
+
+# Lets Lambda create the network interfaces it uses inside the VPC
+resource "aws_iam_role_policy_attachment" "lambda_vpc" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+# Private paths to S3 and DynamoDB (gateway endpoints are free)
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_vpc.main.main_route_table_id]
+}
+
+resource "aws_vpc_endpoint" "dynamodb" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_vpc.main.main_route_table_id]
+}
+
+# Firewall: no inbound; outbound HTTPS only to S3 and DynamoDB
+resource "aws_security_group" "lambda" {
+  name        = "acme-health-intake-lambda"
+  description = "Intake Lambda: egress to S3 and DynamoDB endpoints only"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    description     = "HTTPS to S3 via gateway endpoint"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [aws_vpc_endpoint.s3.prefix_list_id]
+  }
+
+  egress {
+    description     = "HTTPS to DynamoDB via gateway endpoint"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [aws_vpc_endpoint.dynamodb.prefix_list_id]
+  }
+}
+
+######################################################################
 # GAP-08: API Gateway access logging destination
 # Control: HIPAA 164.312(b), audit controls
 #
