@@ -188,7 +188,7 @@ data "aws_iam_policy_document" "lambda_inline" {
   statement {
     sid       = "WriteSubmissions"
     effect    = "Allow"
-    actions   = ["dynamodb:PutItem"]
+    actions   = ["dynamodb:*"] #["dynamodb:PutItem"]
     resources = [aws_dynamodb_table.intake.arn]
   }
 
