@@ -3,8 +3,10 @@
 # description: "aws_s3_bucket.uploads must have a bucket policy that denies all S3 actions, for all principals, when aws:SecureTransport is false."
 # custom:
 #   gap_id: GAP-03
+#   framework: hipaa
 #   control_id: "164.312(e)(1)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(e)(1)"
 #   severity: high
 #   remediation: "Attach an aws_s3_bucket_policy to aws_s3_bucket.uploads whose policy is an aws_iam_policy_document with a Deny on s3:* for principal * when aws:SecureTransport is false."
 package hipaa.gap03_uploads_tls

@@ -3,8 +3,10 @@
 # description: "Allow statements in policies attached to aws_iam_role.lambda must not use wildcard actions or wildcard resources, and must be verifiable at plan time."
 # custom:
 #   gap_id: GAP-07
+#   framework: hipaa
 #   control_id: "164.312(a)(1)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(a)(1)"
 #   severity: critical
 #   remediation: "Grant only the specific actions handler.py performs (e.g. dynamodb:PutItem, s3:PutObject) on specific resource ARNs, written as an aws_iam_policy_document."
 package hipaa.gap07_lambda_least_privilege

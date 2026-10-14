@@ -3,8 +3,10 @@
 # description: "aws_s3_bucket.uploads must have versioning enabled so overwritten or deleted PHI is recoverable."
 # custom:
 #   gap_id: GAP-04
+#   framework: hipaa
 #   control_id: "164.308(a)(7)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.308(a)(7)"
 #   severity: medium
 #   remediation: "Add aws_s3_bucket_versioning for aws_s3_bucket.uploads with versioning_configuration { status = \"Enabled\" }."
 package hipaa.gap04_uploads_versioning

@@ -3,8 +3,10 @@
 # description: "aws_apigatewayv2_stage.default must send access logs to a destination and set throttling limits. WAF is out of scope (deferred; not attachable to HTTP APIs without CloudFront)."
 # custom:
 #   gap_id: GAP-08
+#   framework: hipaa
 #   control_id: "164.312(b)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(b)"
 #   severity: medium
 #   remediation: "Add access_log_settings { destination_arn = <log group ARN> } and default_route_settings with throttling_burst_limit and throttling_rate_limit > 0 to aws_apigatewayv2_stage.default."
 package hipaa.gap08_api_logging
