@@ -174,38 +174,38 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# GAP-07: deliberately broad permissions on the workload data stores.
 # GAP-07: least privilege (HIPAA 164.312(a)(1)). Only the actions
-# handler.py performs, on only the resources it uses.
+# handler.py performs, on only the resources it uses. Written as a
+# policy document data source so the gate can verify its content at
+# plan time, even when resource ARNs are not yet known.
+data "aws_iam_policy_document" "lambda_inline" {
+  statement {
+    sid       = "WriteSubmissions"
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.intake.arn]
+  }
+
+  statement {
+    sid       = "WriteUploads"
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.uploads.arn}/uploads/*"]
+  }
+
+  # GAP-01/02: use of Acme's PHI CMK, and only that key
+  statement {
+    sid       = "UseAcmeCMK"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey"]
+    resources = [aws_kms_key.phi.arn]
+  }
+}
+
 resource "aws_iam_role_policy" "lambda_inline" {
-  name = "intake-data-access"
-  role = aws_iam_role.lambda.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "WriteSubmissions"
-        Effect   = "Allow"
-        Action   = "dynamodb:PutItem"
-        Resource = aws_dynamodb_table.intake.arn
-      },
-      {
-        Sid      = "WriteUploads"
-        Effect   = "Allow"
-        Action   = "s3:PutObject"
-        Resource = ["${aws_s3_bucket.uploads.arn}/uploads/*"]
-      },
-      # GAP-01 and GAP-02: allow use of CMK and only that key
-      {
-        Sid      = "UseAcmeCMK"
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource = aws_kms_key.phi.arn
-      }
-
-    ]
-  })
+  name   = "intake-data-access"
+  role   = aws_iam_role.lambda.id
+  policy = data.aws_iam_policy_document.lambda_inline.json
 }
 
 resource "aws_lambda_function" "intake" {
