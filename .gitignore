@@ -8,6 +8,7 @@
 tfplan
 *.tfplan
 crash.log
+plan.json
 
 # Lambda build
 terraform/lambda/handler.zip
