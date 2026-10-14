@@ -1,0 +1,133 @@
+name: grc-gate
+
+# PRs: Plan + Policy check (read-only role). The gate decides if merge is allowed.
+# Push to main (a merge): Plan + Policy check + Apply + Sign + Upload (apply role).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # AWS OIDC login + Cosign keyless signing
+  contents: read
+
+# Never run two applies at once; queue instead of cancelling
+concurrency:
+  group: grc-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  TF_DIR: terraform
+  EVIDENCE_DIR: evidence
+
+jobs:
+  grc-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.event_name == 'push' && vars.AWS_APPLY_ROLE_ARN || vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Install Conftest
+        run: |
+          curl -fsSL https://github.com/open-policy-agent/conftest/releases/download/v0.71.0/conftest_0.71.0_Linux_x86_64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin conftest
+
+      - name: Install Cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.4'
+
+      # 1. Plan
+      - name: Plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          mkdir -p "../${EVIDENCE_DIR}"
+          terraform init -input=false
+          terraform validate
+          terraform plan -input=false -no-color -out=tfplan | tee "../${EVIDENCE_DIR}/plan.txt"
+
+      # 2. Policy check: fails closed; a failure stops every step below
+      - name: Policy check
+        run: bash scripts/policy-gate.sh --workspace "$TF_DIR" --policy policies --evidence "$EVIDENCE_DIR"
+
+      # 3. Apply: only on merge to main, and only the exact plan that passed the gate
+      - name: Apply
+        if: github.event_name == 'push'
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -input=false -no-color tfplan | tee "../${EVIDENCE_DIR}/apply.txt"
+
+      # 4. Sign: bundle the evidence, hash it, sign keyless with the workflow's identity
+      - name: Sign
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg commit "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{repo:$repo, commit:$commit, run_id:$run_id, actor:$actor, workflow:$workflow, timestamp:$timestamp}' \
+            > "${EVIDENCE_DIR}/run-metadata.json"
+
+          BUNDLE="evidence-${GITHUB_RUN_ID}-${GITHUB_SHA}.tar.gz"
+          tar czf "$BUNDLE" -C "$EVIDENCE_DIR" .
+          sha256sum "$BUNDLE" | awk '{print $1}' > "${BUNDLE}.sha256"
+          cosign sign-blob --yes --bundle "${BUNDLE}.sig.bundle" "$BUNDLE"
+          echo "BUNDLE=${BUNDLE}" >> "$GITHUB_ENV"
+
+      # 5. Upload: into the Object Lock vault, then record a receipt
+      - name: Upload
+        if: github.event_name == 'push'
+        env:
+          VAULT: ${{ vars.EVIDENCE_VAULT }}
+        run: |
+          set -euo pipefail
+          PREFIX="runs/${GITHUB_RUN_ID}"
+          for f in "$BUNDLE" "${BUNDLE}.sha256" "${BUNDLE}.sig.bundle"; do
+            aws s3 cp "$f" "s3://${VAULT}/${PREFIX}/${f}"
+          done
+
+          VERSION_ID=$(aws s3api head-object --bucket "$VAULT" --key "${PREFIX}/${BUNDLE}" --query VersionId --output text)
+          RETAIN_UNTIL=$(aws s3api head-object --bucket "$VAULT" --key "${PREFIX}/${BUNDLE}" --query ObjectLockRetainUntilDate --output text)
+
+          jq -n \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg vault "$VAULT" \
+            --arg bundle_key "${PREFIX}/${BUNDLE}" \
+            --arg version_id "$VERSION_ID" \
+            --arg sha256 "$(cat "${BUNDLE}.sha256")" \
+            --arg commit "$GITHUB_SHA" \
+            --arg retain_until "$RETAIN_UNTIL" \
+            '{run_id:$run_id, vault:$vault, bundle_key:$bundle_key, version_id:$version_id, sha256:$sha256, commit:$commit, retain_until:$retain_until}' \
+            > receipt.json
+
+          aws s3 cp receipt.json "s3://${VAULT}/${PREFIX}/receipt.json"
+          cat receipt.json
+
+      # Keep a copy of every run's evidence in GitHub too (including failed PR gates)
+      - name: Save run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grc-evidence-${{ github.run_id }}
+          path: |
+            evidence/
+            receipt.json
+          if-no-files-found: ignore
+          retention-days: 90
