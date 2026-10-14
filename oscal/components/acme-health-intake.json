@@ -1,0 +1,143 @@
+{
+  "component-definition": {
+    "uuid": "233e60bc-6565-45a1-ac32-a4bb4ce12f7e",
+    "metadata": {
+      "title": "Acme Health Patient Intake API - governed (HIPAA Security Rule)",
+      "last-modified": "2026-10-14T20:52:00+00:00",
+      "version": "1.0.0",
+      "oscal-version": "1.2.1",
+      "roles": [
+        { "id": "provider", "title": "Provider" }
+      ],
+      "parties": [
+        { "uuid": "13a8571e-33ca-4a0c-bceb-0cfdc22e9eef", "type": "organization", "name": "Acme Health GRC Engineering" }
+      ]
+    },
+    "components": [
+      {
+        "uuid": "4b1aad0c-99f5-4050-8df7-65dd7b4d0f6a",
+        "type": "service",
+        "title": "Acme Health Patient Intake API (governed)",
+        "description": "The cgep-app-starter Patient Intake API (API Gateway HTTP API, Lambda, DynamoDB, S3, VPC) wrapped with a HIPAA-oriented GRC baseline: customer-managed KMS keys, hardening for GAP-01 through GAP-05, GAP-07 and GAP-08, a multi-region CloudTrail trail, an S3 Object Lock evidence vault, Rego policies enforced by Conftest, and a GitHub Actions pipeline that plans, gates, applies on merge to main, signs evidence with Cosign, and uploads it to the vault. GAP-06 is deferred.",
+        "purpose": "Process patient intake submissions containing ePHI in an audit-defensible way, with continuous signed evidence that the controls stay in place.",
+        "props": [
+          { "name": "repository", "value": "https://github.com/bfiser/cgep-capstone" }
+        ],
+        "responsible-roles": [
+          { "role-id": "provider", "party-uuids": ["13a8571e-33ca-4a0c-bceb-0cfdc22e9eef"] }
+        ],
+        "control-implementations": [
+          {
+            "uuid": "8beb0856-135e-4615-9f4e-b62655da4b6c",
+            "source": "https://doi.org/10.6028/NIST.SP.800-66r2",
+            "description": "HIPAA Security Rule implementation. NIST SP 800-66 Rev. 2 (Implementing the HIPAA Security Rule) is the catalog source, since no official OSCAL catalog exists for HIPAA. Each implemented requirement carries its 45 CFR 164 citation in the hipaa-citation prop. Evidence links reference pipeline run 38632599567 (commit 86b36db), the latest signed run when this component was authored.",
+            "implemented-requirements": [
+              {
+                "uuid": "fa5c3d79-3d0c-4fb2-a6ff-c4e01e21f00b",
+                "control-id": "hipaa-164.312-a-2-iv",
+                "description": "ePHI at rest is encrypted with a customer-managed KMS key (aws_kms_key.phi) with automatic annual rotation. The uploads bucket uses SSE-KMS with that key and S3 bucket keys (GAP-01). The DynamoDB submissions table uses server-side encryption with the same key (GAP-02). The Lambda role may use the key only for kms:Decrypt and kms:GenerateDataKey. Policies hipaa.gap01_uploads_cmk and hipaa.gap02_dynamodb_cmk fail the pipeline if either data store falls back to an AWS-owned or AWS-managed key.",
+                "props": [
+                  { "name": "hipaa-citation", "value": "164.312(a)(2)(iv)" },
+                  { "name": "implementation-status", "value": "implemented" },
+                  { "name": "gap-id", "value": "GAP-01" },
+                  { "name": "gap-id", "value": "GAP-02" },
+                  { "name": "terraform-resource", "value": "aws_kms_key.phi" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket_server_side_encryption_configuration.uploads" },
+                  { "name": "terraform-resource", "value": "aws_dynamodb_table.intake" },
+                  { "name": "rego-policy", "value": "hipaa.gap01_uploads_cmk" },
+                  { "name": "rego-policy", "value": "hipaa.gap02_dynamodb_cmk" }
+                ],
+                "links": [
+                  { "rel": "evidence", "href": "s3://acme-health-intake-evidence-80633ffe/runs/38632599567/evidence-38632599567-86b36db882e5d4d97e3a73766e1886d028abe28b.tar.gz", "text": "Cosign-signed pipeline evidence bundle for run 38632599567." },
+                  { "rel": "reference", "href": "https://github.com/bfiser/cgep-capstone/actions/runs/38632599567", "text": "GitHub Actions run 38632599567." }
+                ]
+              },
+              {
+                "uuid": "9728e848-ff64-4dc1-9170-6cb4fe9e91da",
+                "control-id": "hipaa-164.312-e-1",
+                "description": "ePHI in transit is protected. The uploads bucket policy, authored as data.aws_iam_policy_document.uploads_tls so its content is verifiable at plan time, denies all S3 actions for all principals when aws:SecureTransport is false (GAP-03). The intake Lambda runs in the starter VPC's private subnets, which have no internet route; S3 and DynamoDB traffic stays on the AWS network through gateway endpoints, and the function's security group allows only HTTPS egress to those endpoints' prefix lists (GAP-05). Enforced by hipaa.gap03_uploads_tls and hipaa.gap05_lambda_vpc.",
+                "props": [
+                  { "name": "hipaa-citation", "value": "164.312(e)(1)" },
+                  { "name": "implementation-status", "value": "implemented" },
+                  { "name": "gap-id", "value": "GAP-03" },
+                  { "name": "gap-id", "value": "GAP-05" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket_policy.uploads" },
+                  { "name": "terraform-resource", "value": "data.aws_iam_policy_document.uploads_tls" },
+                  { "name": "terraform-resource", "value": "aws_lambda_function.intake" },
+                  { "name": "terraform-resource", "value": "aws_security_group.lambda" },
+                  { "name": "terraform-resource", "value": "aws_vpc_endpoint.s3" },
+                  { "name": "terraform-resource", "value": "aws_vpc_endpoint.dynamodb" },
+                  { "name": "rego-policy", "value": "hipaa.gap03_uploads_tls" },
+                  { "name": "rego-policy", "value": "hipaa.gap05_lambda_vpc" }
+                ],
+                "links": [
+                  { "rel": "evidence", "href": "s3://acme-health-intake-evidence-80633ffe/runs/38632599567/evidence-38632599567-86b36db882e5d4d97e3a73766e1886d028abe28b.tar.gz", "text": "Cosign-signed pipeline evidence bundle for run 38632599567." },
+                  { "rel": "reference", "href": "https://github.com/bfiser/cgep-capstone/actions/runs/38632599567", "text": "GitHub Actions run 38632599567." }
+                ]
+              },
+              {
+                "uuid": "414f921b-7c62-4466-9d99-4ac36466ab0e",
+                "control-id": "hipaa-164.308-a-7",
+                "description": "Retrievable copies of ePHI are maintained. Versioning is enabled on the uploads bucket so overwritten or deleted objects are recoverable (GAP-04), and point-in-time recovery is enabled on the DynamoDB submissions table with a 35-day restore window. Versioning is enforced by hipaa.gap04_uploads_versioning; point-in-time recovery was deployed by the pipeline through the green pull request and is not yet policy-enforced.",
+                "props": [
+                  { "name": "hipaa-citation", "value": "164.308(a)(7)" },
+                  { "name": "implementation-status", "value": "implemented" },
+                  { "name": "gap-id", "value": "GAP-04" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket_versioning.uploads" },
+                  { "name": "terraform-resource", "value": "aws_dynamodb_table.intake" },
+                  { "name": "rego-policy", "value": "hipaa.gap04_uploads_versioning" }
+                ],
+                "links": [
+                  { "rel": "evidence", "href": "s3://acme-health-intake-evidence-80633ffe/runs/38632599567/evidence-38632599567-86b36db882e5d4d97e3a73766e1886d028abe28b.tar.gz", "text": "Cosign-signed pipeline evidence bundle for run 38632599567." },
+                  { "rel": "reference", "href": "https://github.com/bfiser/cgep-capstone/actions/runs/38632599567", "text": "GitHub Actions run 38632599567." }
+                ]
+              },
+              {
+                "uuid": "6250255b-d5ff-4ba0-83da-48e3b958c5b2",
+                "control-id": "hipaa-164.312-a-1",
+                "description": "Access to ePHI is limited to what the intake function requires. The Lambda role's inline policy, authored as data.aws_iam_policy_document.lambda_inline, grants only dynamodb:PutItem on the submissions table, s3:PutObject under uploads/ in the uploads bucket, and kms:Decrypt and kms:GenerateDataKey on the PHI key, replacing the starter's dynamodb:* and s3:* (GAP-07). Pipeline access is split into a pull-request role with read-only access and a main-branch-only apply role that is explicitly denied use of the PHI key and Object Lock retention bypass. Enforced by hipaa.gap07_lambda_least_privilege.",
+                "props": [
+                  { "name": "hipaa-citation", "value": "164.312(a)(1)" },
+                  { "name": "implementation-status", "value": "implemented" },
+                  { "name": "gap-id", "value": "GAP-07" },
+                  { "name": "terraform-resource", "value": "aws_iam_role_policy.lambda_inline" },
+                  { "name": "terraform-resource", "value": "data.aws_iam_policy_document.lambda_inline" },
+                  { "name": "terraform-resource", "value": "aws_iam_role.pipeline_plan" },
+                  { "name": "terraform-resource", "value": "aws_iam_role.pipeline_apply" },
+                  { "name": "terraform-resource", "value": "aws_iam_role_policy.pipeline_apply_guardrails" },
+                  { "name": "rego-policy", "value": "hipaa.gap07_lambda_least_privilege" }
+                ],
+                "links": [
+                  { "rel": "evidence", "href": "s3://acme-health-intake-evidence-80633ffe/runs/38632599567/evidence-38632599567-86b36db882e5d4d97e3a73766e1886d028abe28b.tar.gz", "text": "Cosign-signed pipeline evidence bundle for run 38632599567." },
+                  { "rel": "reference", "href": "https://github.com/bfiser/cgep-capstone/actions/runs/38632599567", "text": "GitHub Actions run 38632599567." }
+                ]
+              },
+              {
+                "uuid": "ebc7993c-3f94-442b-8c58-f971cdbd6b0c",
+                "control-id": "hipaa-164.312-b",
+                "description": "Activity in systems containing ePHI is recorded and examinable. API Gateway access logs (request metadata only, never request bodies) go to a CloudWatch log group with 365-day retention, and the stage is throttled (GAP-08; WAF deferred). A multi-region CloudTrail trail with log file validation records management events to a dedicated, versioned, TLS-only bucket. Every merge to main produces a Cosign-signed evidence bundle stored in an S3 Object Lock vault (GOVERNANCE mode, 60-day retention) encrypted with a dedicated evidence key. Access logging and throttling are enforced by hipaa.gap08_api_logging.",
+                "props": [
+                  { "name": "hipaa-citation", "value": "164.312(b)" },
+                  { "name": "implementation-status", "value": "implemented" },
+                  { "name": "gap-id", "value": "GAP-08" },
+                  { "name": "terraform-resource", "value": "aws_apigatewayv2_stage.default" },
+                  { "name": "terraform-resource", "value": "aws_cloudwatch_log_group.api_access" },
+                  { "name": "terraform-resource", "value": "aws_cloudtrail.mgmt" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket.trail" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket.evidence" },
+                  { "name": "terraform-resource", "value": "aws_s3_bucket_object_lock_configuration.evidence" },
+                  { "name": "terraform-resource", "value": "aws_kms_key.evidence" },
+                  { "name": "rego-policy", "value": "hipaa.gap08_api_logging" }
+                ],
+                "links": [
+                  { "rel": "evidence", "href": "s3://acme-health-intake-evidence-80633ffe/runs/38632599567/evidence-38632599567-86b36db882e5d4d97e3a73766e1886d028abe28b.tar.gz", "text": "Cosign-signed pipeline evidence bundle for run 38632599567." },
+                  { "rel": "reference", "href": "https://github.com/bfiser/cgep-capstone/actions/runs/38632599567", "text": "GitHub Actions run 38632599567." }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
