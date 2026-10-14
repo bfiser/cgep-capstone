@@ -3,8 +3,10 @@
 # description: "aws_s3_bucket.uploads must use SSE-KMS with a customer-managed key, not AWS-managed SSE-S3."
 # custom:
 #   gap_id: GAP-01
+#   framework: hipaa
 #   control_id: "164.312(a)(2)(iv)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(a)(2)(iv)"
 #   severity: high
 #   remediation: "Add aws_s3_bucket_server_side_encryption_configuration for aws_s3_bucket.uploads with sse_algorithm = \"aws:kms\" and kms_master_key_id set to a customer-managed key."
 package hipaa.gap01_uploads_cmk

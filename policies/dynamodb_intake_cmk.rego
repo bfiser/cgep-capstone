@@ -3,8 +3,10 @@
 # description: "aws_dynamodb_table.intake must enable server-side encryption with a customer-managed key, not the AWS-owned or AWS-managed default."
 # custom:
 #   gap_id: GAP-02
+#   framework: hipaa
 #   control_id: "164.312(a)(2)(iv)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(a)(2)(iv)"
 #   severity: high
 #   remediation: "Add a server_side_encryption block to aws_dynamodb_table.intake with enabled = true and kms_key_arn set to a customer-managed key."
 package hipaa.gap02_dynamodb_cmk

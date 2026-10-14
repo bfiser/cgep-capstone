@@ -3,8 +3,10 @@
 # description: "aws_lambda_function.intake must have a vpc_config with subnets and security groups, and must not use public subnets."
 # custom:
 #   gap_id: GAP-05
+#   framework: hipaa
 #   control_id: "164.312(e)(1)"
-#   framework: hipaa-security-rule
+#   controls:
+#     - "164.312(e)(1)"
 #   severity: high
 #   remediation: "Add vpc_config to aws_lambda_function.intake with subnet_ids = aws_subnet.private[*].id and a restrictive security group."
 package hipaa.gap05_lambda_vpc
