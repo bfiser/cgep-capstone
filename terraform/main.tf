@@ -120,6 +120,12 @@ resource "aws_dynamodb_table" "intake" {
     kms_key_arn = aws_kms_key.phi.arn
   }
 
+  # Continuous backups: restore to any point in the last 35 days
+  # (HIPAA 164.308(a)(7), contingency plan / data backup)
+  point_in_time_recovery {
+    enabled = true
+  }
+
 }
 
 ######################################################################
