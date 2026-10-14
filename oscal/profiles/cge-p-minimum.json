@@ -1,0 +1,28 @@
+{
+  "profile": {
+    "uuid": "5e845955-1248-4f2f-84fc-bf7949447f37",
+    "metadata": {
+      "title": "CGE-P minimum control selection - HIPAA Security Rule",
+      "last-modified": "2026-10-14T20:52:00+00:00",
+      "version": "1.0.0",
+      "oscal-version": "1.2.1"
+    },
+    "imports": [
+      {
+        "href": "https://doi.org/10.6028/NIST.SP.800-66r2",
+        "include-controls": [
+          {
+            "with-ids": [
+              "hipaa-164.312-a-2-iv",
+              "hipaa-164.312-e-1",
+              "hipaa-164.308-a-7",
+              "hipaa-164.312-a-1",
+              "hipaa-164.312-b"
+            ]
+          }
+        ]
+      }
+    ],
+    "merge": { "as-is": true }
+  }
+}
