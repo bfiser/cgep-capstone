@@ -54,27 +54,33 @@ resource "aws_s3_bucket_versioning" "uploads" {
 # Control: HIPAA 164.312(e)(1), transmission security
 #
 # Refuses any request not made over TLS, for every caller,
-# so ePHI in transit is always encrypted.
+# so ePHI in transit is always encrypted. Written as a policy
+# document data source so the gate can verify its content at
+# plan time, even when the bucket ARN is not yet known.
 ######################################################################
+data "aws_iam_policy_document" "uploads_tls" {
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.uploads.arn, "${aws_s3_bucket.uploads.arn}/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
 resource "aws_s3_bucket_policy" "uploads" {
   bucket = aws_s3_bucket.uploads.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid       = "DenyInsecureTransport"
-      Effect    = "Deny"
-      Principal = "*"
-      Action    = "s3:*"
-      Resource = [
-        aws_s3_bucket.uploads.arn,
-        "${aws_s3_bucket.uploads.arn}/*",
-      ]
-      Condition = {
-        Bool = { "aws:SecureTransport" = "false" }
-      }
-    }]
-  })
+  policy = data.aws_iam_policy_document.uploads_tls.json
 }
 
 ######################################################################
