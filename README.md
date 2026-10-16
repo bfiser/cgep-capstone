@@ -36,6 +36,8 @@ bash scripts/verify-evidence.sh 38632599567 \
 
 Runs three checks: SHA-256 against the stored hash and the receipt, Cosign signature against the public Sigstore log (identity pinned to this repo's `grc-gate.yml` on `main`), and active Object Lock retention.
 
+Run 38632599567 is the merge of PR #19 (commit 86b36db), the same run traced in WRITEUP.md and cited by the OSCAL component.
+
 ### 3. Evidence chain (without AWS access)
 
 Every merge's run artifact (`grc-evidence-<run id>`) contains the signed bundle, its hash, its signature, and a receipt. Download it from the run's **Summary** page, unzip, then:
