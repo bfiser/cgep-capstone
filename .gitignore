@@ -17,4 +17,5 @@ terraform/lambda/handler.zip
 evidence/
 .DS_Store
 NOTES.md
+README-old.md
 .trestle-work/

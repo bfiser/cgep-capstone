@@ -1,80 +1,91 @@
-# cgep-app-starter
+# Acme Health: CGE-P Capstone
 
-> Patient Intake API for "Acme Health". The deliberately-flawed workload your **CGE-P capstone** wraps with GRC controls.
+Governed fork of [`GRCEngClub/cgep-app-starter`](https://github.com/GRCEngClub/cgep-app-starter). The Patient Intake API handles ePHI, so the primary framework is the **HIPAA Security Rule**. The starter's resources are unchanged in purpose and still deployable; the GRC controls are wrapped around them.
 
-## What this is
+- **Design reasoning, trade-offs, and gaps:** [WRITEUP.md](WRITEUP.md)
+- **The named gaps:** [GAPS.md](GAPS.md)
 
-A minimal AWS workload: VPC, Lambda, API Gateway, DynamoDB, S3. It ingests patient intake submissions over HTTPS. Think of it as a system you have just inherited from an engineering team and been asked to make audit-defensible.
+| Layer | Where |
+|---|---|
+| 1. Terraform baseline | `terraform/` (`kms.tf`, `hardening.tf`, `evidence-vault.tf`, `cloudtrail.tf`, `oidc-trust.tf`, `backend.tf`) |
+| 2. Policy suite | `policies/` (7 policies) and `policies/tests/` (37 tests) |
+| 3. Pipeline | `.github/workflows/grc-gate.yml`, `scripts/policy-gate.sh`, `scripts/verify-evidence.sh` |
+| 4. OSCAL | `oscal/components/acme-health-intake.json`, `oscal/profiles/cge-p-minimum.json` |
 
-This repository ships **non-compliant on purpose**. Your job in the capstone is not to rewrite this app. Your job is to wrap it with the four CGE-P layers (Terraform GRC baseline, Rego policies, GitHub Actions evidence pipeline, OSCAL component) so the same workload becomes audit-defensible against HIPAA, SOC 2, and CMMC L2.
+## Prerequisites
 
-## The deploy gate
+To run the verification steps: `git`, `jq`, `unzip`, [OPA](https://www.openpolicyagent.org/docs/latest/#running-opa), [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and Python 3 with `compliance-trestle` (`pip install compliance-trestle`). Steps 2 and 6 also need the AWS CLI with access to the deployment account. Versions used: OPA 1.21, Conftest 0.71, Terraform 1.16.4, Cosign v2.2.4 in the pipeline (v3 verifies the same bundles), trestle 5.2.0.
 
-If you cannot deploy this starter, you cannot pass the capstone. Real GRC engineers inherit working systems. Step zero is making the system run.
+## Grader verification
+
+### 1. Policies
 
 ```bash
-git clone https://github.com/GRCEngClub/cgep-app-starter
-cd cgep-app-starter
-
-# Confirm you're authenticated to the right account:
-make creds AWS_PROFILE=<your-sandbox-profile>
-
-make deploy AWS_PROFILE=<your-sandbox-profile>
-make test    AWS_PROFILE=<your-sandbox-profile>
+opa test policies -v
+# expect: PASS: 37/37
 ```
 
-> **AWS SSO note:** if your profile is SSO-based, Terraform's AWS provider can fail to read it directly with `failed to find SSO session section`. The Makefile's `eval $(aws configure export-credentials)` pattern handles this. If you're running `terraform` commands by hand, do the same export first.
+### 2. Evidence chain (with access to the deployment account)
 
-Expected output of `make test`:
-
-```json
-{
-    "submission_id": "f1e3...",
-    "status": "received"
-}
+```bash
+bash scripts/verify-evidence.sh 38632599567 \
+  --vault acme-health-intake-evidence-80633ffe \
+  --profile <aws-profile>
+# expect: CHAIN INTACT for run 38632599567
 ```
 
-When you're done exploring: `make destroy`.
+Runs three checks: SHA-256 against the stored hash and the receipt, Cosign signature against the public Sigstore log (identity pinned to this repo's `grc-gate.yml` on `main`), and active Object Lock retention.
 
-## What you build on top
+### 3. Evidence chain (without AWS access)
 
-Fork the repo into your own `cgep-capstone` and add:
+Every merge's run artifact (`grc-evidence-<run id>`) contains the signed bundle, its hash, its signature, and a receipt. Download it from the run's **Summary** page, unzip, then:
 
-1. **Layer 1 — GRC baseline (Terraform).** KMS keys, an S3 evidence vault with Object Lock, a CloudTrail trail. Bring this starter's data stores under your CMK.
-2. **Layer 2 — OPA policy suite (Rego).** Five or more policies that catch the named gaps in [GAPS.md](GAPS.md). Each policy maps to at least one control from the framework you choose.
-3. **Layer 3 — GitHub Actions pipeline.** Plan → Conftest gate → apply → Cosign sign → upload to vault.
-4. **Layer 4 — OSCAL component.** A `component-definition.json` describing how your governed system implements its controls.
-
-Full brief: `docs/labs/07_01_capstone_brief.md` in the course content repo.
-
-## Framework mapping is required
-
-Your capstone must declare a primary framework: **HIPAA Security Rule**, **SOC 2 Trust Services Criteria**, or **CMMC Level 2**. Every policy carries at least one control ID from your chosen framework. Your OSCAL component's `control-implementations` reference your framework's catalog.
-
-A starter mapping is in [FRAMEWORKS.md](FRAMEWORKS.md). It is not the only valid mapping. You're expected to defend yours.
-
-## Cost
-
-Roughly $0 if destroyed within an hour. Lambda + API Gateway + DynamoDB + S3 are all pay-per-use, and an empty deployment generates no traffic. CloudTrail (which you add) costs cents.
-
-## Layout
-
-```
-cgep-app-starter/
-├── README.md            # this file
-├── WORKLOAD.md          # what the API does
-├── GAPS.md              # the named flaws your policies must catch
-├── FRAMEWORKS.md        # HIPAA / SOC 2 / CMMC mapping primer
-├── Makefile             # make deploy | test | destroy
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── lambda/handler.py
-└── test/
-    └── intake.sh
+```bash
+BUNDLE=$(ls evidence-*.tar.gz)
+sha256sum "$BUNDLE"; cat "$BUNDLE.sha256"; jq -r .sha256 receipt.json   # all three match
+cosign verify-blob --bundle "$BUNDLE.sig.bundle" \
+  --certificate-identity "https://github.com/bfiser/cgep-capstone/.github/workflows/grc-gate.yml@refs/heads/main" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  "$BUNDLE"
+# expect: Verified OK
+jq -r .retain_until receipt.json   # Object Lock date recorded at upload
 ```
 
-## License
+This path proves integrity and authenticity. Live retention can only be confirmed from the vault (path 2).
 
-MIT. Fork freely. Submissions remain learners' own work.
+### 4. OSCAL
+
+Trestle requires a workspace; this keeps it out of the repo (`.trestle-work/` is gitignored):
+
+```bash
+mkdir .trestle-work && cd .trestle-work && trestle init
+mkdir -p component-definitions/acme-health-intake profiles/cge-p-minimum
+cp ../oscal/components/acme-health-intake.json component-definitions/acme-health-intake/component-definition.json
+cp ../oscal/profiles/cge-p-minimum.json profiles/cge-p-minimum/profile.json
+trestle validate -a
+# expect: VALID for both models
+```
+
+Catalog source is NIST SP 800-66 Rev. 2 (no official HIPAA OSCAL catalog exists); each requirement carries its 164.x citation, Terraform addresses, Rego package, and an `s3://` link to a signed bundle.
+
+### 5. The gate has teeth
+
+- **Green PR:** [#15](https://github.com/bfiser/cgep-capstone/pull/15) enabled DynamoDB point-in-time recovery. Passed the gate, merged, applied by the pipeline, evidence signed and uploaded.
+- **Red PR:** [#16](https://github.com/bfiser/cgep-capstone/pull/16) grants the Lambda `dynamodb:*` (GAP-07). Failed the gate with a HIPAA 164.312(a)(1) violation; merge blocked by the required check. Left open as evidence.
+
+### 6. The workload still runs
+
+```bash
+make test AWS_PROFILE=<aws-profile>
+# expect: "status": "received"
+```
+
+## Pipeline
+
+`grc-gate.yml` runs **Plan → Policy check → Apply → Sign → Upload**. Pull requests run the first two with a read-only OIDC role; merges to `main` run all five with a main-only apply role. A repository ruleset requires a PR and a passing `grc-gate` check for `main`, with no bypass.
+
+Repository variables: `AWS_PLAN_ROLE_ARN`, `AWS_APPLY_ROLE_ARN`, `EVIDENCE_VAULT`.
+
+## Do not run `make destroy`
+
+The vault (Object Lock, deletion-deny policy) and the CloudTrail bucket (`force_destroy = false`) are designed to resist deletion, so a full destroy would fail partway. Teardown needs an ordered, manual process.
