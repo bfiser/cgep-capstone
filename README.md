@@ -14,7 +14,7 @@ Governed fork of [`GRCEngClub/cgep-app-starter`](https://github.com/GRCEngClub/c
 
 ## Prerequisites
 
-To run the verification steps: `git`, `jq`, `unzip`, [OPA](https://www.openpolicyagent.org/docs/latest/#running-opa), [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and Python 3 with `compliance-trestle` (`pip install compliance-trestle`). Steps 2 and 6 also need the AWS CLI with access to the deployment account. Versions used: OPA 1.21, Conftest 0.71, Terraform 1.16.4, Cosign v2.2.4 in the pipeline (v3 verifies the same bundles), trestle 5.2.0.
+To run the verification steps: `git`, `jq`, `unzip`, [OPA](https://www.openpolicyagent.org/docs/latest/#running-opa), [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and Python 3 with `compliance-trestle` (`pip install compliance-trestle`). Steps 2 and 6 also need the AWS CLI with access to the deployment account. Versions used: OPA 1.21, Conftest 0.71, Terraform 1.16.4, Cosign v2.2.4 in the pipeline (v3 verifies the same bundles), trestle 5.2.0. In the commands below, replace `<aws-profile>` with the name of your AWS CLI profile (often `default`).
 
 ## Grader verification
 
@@ -24,6 +24,8 @@ To run the verification steps: `git`, `jq`, `unzip`, [OPA](https://www.openpolic
 opa test policies -v
 # expect: PASS: 37/37
 ```
+
+In the pipeline, `scripts/policy-gate.sh` runs the same policies with Conftest against each Terraform plan. To see a real result without AWS access, open the **Policy check** step on red PR #16's run: it shows Conftest failing GAP-07 with a HIPAA 164.312(a)(1) message. To run Conftest against a plan yourself, see [Planning in another AWS account](#planning-in-another-aws-account).
 
 ### 2. Evidence chain (with access to the deployment account)
 
@@ -81,6 +83,23 @@ Catalog source is NIST SP 800-66 Rev. 2 (no official HIPAA OSCAL catalog exists)
 make test AWS_PROFILE=<aws-profile>
 # expect: "status": "received"
 ```
+
+## Planning in another AWS account
+
+`backend.tf` uses this project's private state bucket. To plan from your own account, override it with local state (Terraform merges `*_override.tf` files over the main configuration):
+
+```bash
+cat > terraform/backend_override.tf <<'EOF'
+terraform {
+  backend "local" {}
+}
+EOF
+cd terraform && terraform init && terraform plan -out=tfplan
+terraform show -json tfplan > ../plan.json && cd ..
+conftest test plan.json --policy policies --all-namespaces
+```
+
+The OIDC roles look up an existing GitHub OIDC provider (`token.actions.githubusercontent.com`); the plan expects one in the account.
 
 ## Pipeline
 
