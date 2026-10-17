@@ -15,6 +15,7 @@ terraform/lambda/handler.zip
 
 # Local
 evidence/
+terraform/backend_override.tf
 .DS_Store
 NOTES.md
 README-old.md
